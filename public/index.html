@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vibe — Chat & Calls</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --bg-base:#0d0f12;
+  --bg-surface:#141720;
+  --bg-panel:#1a1e2a;
+  --bg-hover:#202433;
+  --bg-active:#252a3a;
+  --accent:#6c63ff;
+  --sent:#3d3580;
+  --sent-txt:#e8e6ff;
+  --recv:#1e2230;
+  --recv-txt:#d4d8e8;
+  --txt1:#eef0f8;
+  --txt2:#8890aa;
+  --txt3:#535872;
+  --border:rgba(255,255,255,.06);
+  --online:#34d399;
+  --away:#f59e0b;
+  --font:'DM Sans',sans-serif;
+  --red:#ef4444;
+  --green:#22c55e;
+}
+
+html,body{height:100%;background:var(--bg-base);color:var(--txt1);font-family:var(--font);overflow:hidden}
+
+/* ── JOIN SCREEN ── */
+#joinScreen{
+  position:fixed;inset:0;background:var(--bg-base);z-index:9999;
+  display:flex;align-items:center;justify-content:center;
+}
+.join-card{
+  background:var(--bg-panel);border:1px solid var(--border);border-radius:24px;
+  padding:40px;width:360px;text-align:center;
+  box-shadow:0 32px 80px rgba(0,0,0,.6);
+}
+.join-logo{
+  width:56px;height:56px;background:var(--accent);border-radius:16px;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;
+  color:#fff;margin-bottom:18px;
+}
+.join-card h1{
+  font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;
+  margin-bottom:6px;
+}
+.join-card p{font-size:13.5px;color:var(--txt2);margin-bottom:28px;line-height:1.5}
+.join-input{
+  width:100%;background:var(--bg-surface);border:1px solid var(--border);
+  border-radius:12px;padding:12px 16px;color:var(--txt1);
+  font-family:var(--font);font-size:14px;outline:none;
+  margin-bottom:14px;transition:border .2s;
+}
+.join-input:focus{border-color:var(--accent)}
+.join-btn{
+  width:100%;padding:13px;border-radius:12px;background:var(--accent);
+  border:none;color:#fff;font-family:var(--font);font-size:14.5px;
+  font-weight:600;cursor:pointer;transition:opacity .15s,transform .1s;
+}
+.join-btn:hover{opacity:.88;transform:scale(1.02)}
+.join-btn:active{transform:scale(.97)}
+.join-btn:disabled{opacity:.4;cursor:default;transform:none}
+
+/* ── LAYOUT ── */
+.app{display:flex;height:100vh}
+
+/* ── SIDEBAR ── */
+.sidebar{width:300px;min-width:300px;background:var(--bg-surface);display:flex;flex-direction:column;border-right:1px solid var(--border)}
+.sb-head{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.brand-ic{width:34px;height:34px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;font-family:'Space Grotesk',sans-serif;color:#fff;flex-shrink:0}
+.brand-nm{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;letter-spacing:-.5px}
+.brand-nm span{color:var(--accent)}
+.search{display:flex;align-items:center;gap:8px;background:var(--bg-panel);border-radius:11px;padding:8px 13px;border:1px solid var(--border)}
+.search input{background:none;border:none;outline:none;color:var(--txt1);font-family:var(--font);font-size:13px;width:100%}
+.search input::placeholder{color:var(--txt3)}
+
+.contacts{flex:1;overflow-y:auto;padding:6px 0}
+.contacts::-webkit-scrollbar{width:3px}
+.contacts::-webkit-scrollbar-thumb{background:var(--bg-active);border-radius:2px}
+.sec-lbl{font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--txt3);padding:10px 16px 5px}
+
+.contact{display:flex;align-items:center;gap:11px;padding:10px 16px;cursor:pointer;transition:background .12s;position:relative;user-select:none}
+.contact:hover{background:var(--bg-hover)}
+.contact.active{background:var(--bg-active)}
+.contact.active::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;background:var(--accent);border-radius:0 3px 3px 0}
+
+.av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;position:relative;color:#fff}
+.av-dot{width:11px;height:11px;border-radius:50%;position:absolute;bottom:0;right:0;border:2.5px solid var(--bg-surface)}
+
+.ci{flex:1;min-width:0}
+.ct{display:flex;justify-content:space-between;align-items:center;margin-bottom:2px}
+.cn{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctm{font-size:11px;color:var(--txt3);flex-shrink:0;margin-left:6px}
+.cp{font-size:12px;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{background:var(--accent);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;flex-shrink:0;margin-left:6px;min-width:18px;text-align:center}
+
+.sb-foot{padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.my-av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#9f6bff);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;flex-shrink:0}
+.my-nm{font-size:13px;font-weight:500}
+.my-st{font-size:11px;color:var(--online);transition:color .3s}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg-base)}
+
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--txt3)}
+.empty-ic{width:68px;height:68px;border-radius:20px;background:var(--bg-panel);display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--accent)}
+.empty h2{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:600;color:var(--txt2)}
+.empty p{font-size:13px}
+
+/* Chat header */
+.ch{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg-surface);flex-shrink:0}
+.ch-info{flex:1;min-width:0}
+.ch-name{font-size:15px;font-weight:600}
+.ch-st{font-size:12px;color:var(--txt2);display:flex;align-items:center;gap:5px}
+.ch-acts{display:flex;gap:3px}
+.call-btn{width:36px;height:36px;border-radius:10px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .12s,transform .1s;color:#fff}
+.call-btn:hover{transform:scale(1.06)}
+.call-btn:active{transform:scale(.95)}
+.call-btn.audio{background:rgba(52,211,153,.18);color:var(--online)}
+.call-btn.audio:hover{background:rgba(52,211,153,.3)}
+.call-btn.video{background:rgba(108,99,255,.2);color:#a5b4fc}
+.call-btn.video:hover{background:rgba(108,99,255,.35)}
+.ib{width:30px;height:30px;border-radius:8px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt3);transition:background .12s,color .12s}
+.ib:hover{background:var(--bg-hover);color:var(--txt1)}
+
+/* Messages */
+.msgs{flex:1;overflow-y:auto;padding:18px 18px 10px;display:flex;flex-direction:column;gap:3px}
+.msgs::-webkit-scrollbar{width:3px}
+.msgs::-webkit-scrollbar-thumb{background:var(--bg-active);border-radius:2px}
+.date-div{display:flex;align-items:center;gap:12px;margin:10px 0 6px}
+.date-div::before,.date-div::after{content:'';flex:1;height:1px;background:var(--border)}
+.date-div span{font-size:11px;color:var(--txt3)}
+
+.mrow{display:flex;align-items:flex-end;gap:7px;margin-bottom:1px}
+.mrow.sent{flex-direction:row-reverse}
+.mav{width:27px;height:27px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;align-self:flex-end;color:#fff}
+.mstack{display:flex;flex-direction:column;max-width:64%}
+.mrow.sent .mstack{align-items:flex-end}
+.bubble{padding:9px 13px;border-radius:17px;font-size:13.5px;line-height:1.55;word-break:break-word}
+.bubble.sent{background:var(--sent);color:var(--sent-txt);border-bottom-right-radius:4px}
+.bubble.recv{background:var(--recv);color:var(--recv-txt);border-bottom-left-radius:4px}
+.mmeta{font-size:10.5px;color:var(--txt3);margin-top:3px;display:flex;align-items:center;gap:3px}
+.mrow.sent .mmeta{justify-content:flex-end}
+.sys-msg{align-self:center;font-size:11.5px;color:var(--txt3);background:var(--bg-panel);padding:4px 13px;border-radius:20px;margin:8px 0}
+
+/* Typing */
+.typing-row{display:flex;align-items:flex-end;gap:7px}
+.typing-bub{background:var(--recv);border-radius:17px 17px 17px 4px;padding:12px 15px;display:flex;gap:4px;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--txt3);animation:bounce 1.2s infinite}
+.dot:nth-child(2){animation-delay:.2s}
+.dot:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-5px);opacity:1}}
+
+/* Input */
+.input-area{padding:12px 16px;border-top:1px solid var(--border);display:flex;align-items:flex-end;gap:9px;background:var(--bg-surface);flex-shrink:0}
+.inp-box{flex:1;background:var(--bg-panel);border:1px solid var(--border);border-radius:13px;padding:9px 12px;display:flex;align-items:flex-end;gap:9px}
+.inp-box textarea{flex:1;background:none;border:none;outline:none;resize:none;font-family:var(--font);font-size:13.5px;color:var(--txt1);line-height:1.5;max-height:100px;min-height:21px;height:21px}
+.inp-box textarea::placeholder{color:var(--txt3)}
+.send-btn{width:40px;height:40px;border-radius:11px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .15s,transform .1s;color:#fff;flex-shrink:0}
+.send-btn:hover{opacity:.88;transform:scale(1.05)}
+.send-btn:active{transform:scale(.95)}
+.send-btn:disabled{opacity:.35;cursor:default;transform:none}
+
+/* ── CALL OVERLAY ── */
+.call-overlay{position:fixed;inset:0;background:rgba(7,9,14,.97);z-index:999;display:none;flex-direction:column;align-items:center;justify-content:space-between;padding:40px 20px 50px}
+.call-overlay.active{display:flex}
+.call-top{text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px}
+.call-av{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:600;color:#fff;border:3px solid rgba(255,255,255,.08)}
+.call-nm{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600}
+.call-st{font-size:14px;color:var(--txt2)}
+.call-timer{font-size:15px;color:var(--online);font-weight:500;display:none}
+.video-grid{width:100%;max-width:900px;display:flex;gap:12px;flex:1;align-items:center;justify-content:center;margin:20px 0}
+.vid-wrap{position:relative;border-radius:16px;overflow:hidden;background:#0a0c10;border:1px solid var(--border);display:flex;align-items:center;justify-content:center}
+.vid-wrap.remote{flex:1;min-height:300px}
+.vid-wrap.local{width:220px;height:160px;flex-shrink:0}
+.vid-wrap video{width:100%;height:100%;object-fit:cover;display:block}
+.vid-label{position:absolute;bottom:8px;left:10px;font-size:11px;color:rgba(255,255,255,.75);background:rgba(0,0,0,.45);padding:3px 8px;border-radius:6px}
+.cam-ph{display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--txt3);padding:40px}
+.cam-ph span{font-size:13px}
+.audio-vis{flex:1;display:flex;align-items:center;justify-content:center}
+.wave-bars{display:flex;gap:5px;align-items:center;height:30px}
+.wave-bar{width:4px;border-radius:4px;background:var(--accent);animation:wave 1s infinite}
+.wave-bar:nth-child(2){animation-delay:.15s;height:60%}
+.wave-bar:nth-child(3){animation-delay:.3s}
+.wave-bar:nth-child(4){animation-delay:.45s;height:60%}
+.wave-bar:nth-child(5){animation-delay:.6s}
+@keyframes wave{0%,100%{opacity:.4;transform:scaleY(.7)}50%{opacity:1;transform:scaleY(1)}}
+.call-ctrls{display:flex;gap:16px;align-items:center}
+.cc-btn{width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .1s,opacity .15s;color:#fff}
+.cc-btn:hover{transform:scale(1.1)}
+.cc-btn:active{transform:scale(.92)}
+.cc-btn.end{background:var(--red);width:64px;height:64px}
+.cc-btn.end:hover{background:#dc2626}
+.cc-btn.toggle{background:var(--bg-active)}
+.cc-btn.toggle.off{background:rgba(239,68,68,.2);color:var(--red)}
+.cc-btn.share-sc{background:rgba(251,191,36,.15);color:#fbbf24}
+.cc-btn.share-sc.on{background:rgba(251,191,36,.3)}
+.screen-wrap{width:100%;max-width:900px;flex:1;position:relative;border-radius:16px;overflow:hidden;background:#0a0c10;border:1px solid var(--border);display:none;align-items:center;justify-content:center;margin:10px 0}
+.screen-wrap video{width:100%;height:100%;object-fit:contain}
+.screen-wrap.active{display:flex}
+
+/* ── INCOMING CALL ── */
+.inc-call{position:fixed;bottom:30px;right:30px;background:var(--bg-panel);border:1px solid var(--border);border-radius:18px;padding:18px 20px;z-index:1001;display:none;flex-direction:column;gap:12px;width:270px;box-shadow:0 16px 50px rgba(0,0,0,.6)}
+.inc-call.show{display:flex;animation:fi .3s ease}
+.inc-top{display:flex;align-items:center;gap:10px}
+.inc-nm{font-size:14px;font-weight:600}
+.inc-type{font-size:12px;color:var(--txt2)}
+.inc-acts{display:flex;gap:10px}
+.inc-btn{flex:1;padding:10px;border-radius:11px;border:none;cursor:pointer;font-size:13px;font-weight:500;font-family:var(--font)}
+.inc-btn.dec{background:rgba(239,68,68,.2);color:var(--red)}
+.inc-btn.dec:hover{background:rgba(239,68,68,.35)}
+.inc-btn.acc{background:var(--green);color:#fff}
+.inc-btn.acc:hover{background:#16a34a}
+
+/* Toast */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--bg-panel);border:1px solid var(--border);color:var(--txt1);padding:10px 20px;border-radius:12px;font-size:13px;z-index:9000;display:none;align-items:center;gap:8px;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.toast.show{display:flex;animation:fi .2s ease}
+
+.fade-in{animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- JOIN SCREEN -->
+<div id="joinScreen">
+  <div class="join-card">
+    <div class="join-logo">V</div>
+    <h1>Welcome to Vibe</h1>
+    <p>Enter your name to start chatting and calling with anyone who opens this app.</p>
+    <input class="join-input" id="joinName" type="text" placeholder="Your name…" maxlength="32" autocomplete="off">
+    <button class="join-btn" id="joinBtn" onclick="joinApp()">Join Vibe →</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<!-- INCOMING CALL -->
+<div class="inc-call" id="incCall">
+  <div class="inc-top">
+    <div class="av" id="incAv" style="width:42px;height:42px;font-size:15px;flex-shrink:0"></div>
+    <div>
+      <div class="inc-nm" id="incNm"></div>
+      <div class="inc-type" id="incType"></div>
+    </div>
+  </div>
+  <div class="inc-acts">
+    <button class="inc-btn dec" onclick="declineCall()">Decline</button>
+    <button class="inc-btn acc" onclick="acceptCall()">Accept</button>
+  </div>
+</div>
+
+<!-- CALL OVERLAY -->
+<div class="call-overlay" id="callOverlay">
+  <div class="call-top">
+    <div class="call-av" id="callAv"></div>
+    <div class="call-nm" id="callNm"></div>
+    <div class="call-st" id="callSt">Calling…</div>
+    <div class="call-timer" id="callTimer">0:00</div>
+  </div>
+
+  <div class="audio-vis" id="audioVis">
+    <div>
+      <div id="audioCallAv" style="width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:600;color:#fff;border:4px solid rgba(255,255,255,.08);margin:0 auto 20px"></div>
+      <div class="wave-bars">
+        <div class="wave-bar" style="height:100%"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar" style="height:100%"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar" style="height:100%"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="video-grid" id="videoGrid" style="display:none">
+    <div class="vid-wrap remote" id="remoteWrap">
+      <div class="cam-ph" id="remotePh">
+        <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span id="remotePhName">Waiting for camera…</span>
+      </div>
+      <video id="remoteVideo" autoplay playsinline style="display:none"></video>
+      <div class="vid-label" id="remoteLabel"></div>
+    </div>
+    <div class="vid-wrap local">
+      <div class="cam-ph" id="localPh">
+        <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M23 7 16 12l7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <span style="font-size:11px">Camera off</span>
+      </div>
+      <video id="localVideo" autoplay muted playsinline style="display:none"></video>
+      <div class="vid-label">You</div>
+    </div>
+  </div>
+
+  <div class="screen-wrap" id="screenWrap">
+    <video id="screenVideo" autoplay muted playsinline></video>
+    <div class="vid-label">🖥 Your screen</div>
+  </div>
+
+  <div class="call-ctrls">
+    <button class="cc-btn toggle" id="btnMic" title="Mute" onclick="toggleMic()">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </button>
+    <button class="cc-btn toggle" id="btnCam" title="Camera" onclick="toggleCam()" style="display:none">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 7 16 12l7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+    </button>
+    <button class="cc-btn share-sc" id="btnScreen" title="Share screen" onclick="toggleScreen()" style="display:none">
+      <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+    </button>
+    <button class="cc-btn end" onclick="endCall()">
+      <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.97.38 2.03.63 3.12.75a2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.42 19.42 0 0 1 3.07 11.5 19.79 19.79 0 0 1 0 2.88A2 2 0 0 1 1.99 1h3a2 2 0 0 1 2 1.72c.12 1.09.37 2.15.75 3.12a2 2 0 0 1-.45 2.11L6.02 9.1a16 16 0 0 0 4.66 4.21"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="appShell" style="display:none">
+  <div class="sidebar">
+    <div class="sb-head">
+      <div class="brand">
+        <div class="brand-ic">V</div>
+        <div class="brand-nm">Vibe<span>.</span></div>
+      </div>
+      <div class="search">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" placeholder="Search people…" id="searchIn">
+      </div>
+    </div>
+    <div class="contacts" id="cList">
+      <div style="padding:40px 16px;text-align:center;color:var(--txt3);font-size:13px">
+        Waiting for others to join…
+      </div>
+    </div>
+    <div class="sb-foot">
+      <div class="my-av" id="myAv">?</div>
+      <div style="flex:1;min-width:0">
+        <div class="my-nm" id="myName">You</div>
+        <div class="my-st" id="myStatus">● Active now</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main" id="mainArea">
+    <div class="empty">
+      <div class="empty-ic">✦</div>
+      <h2>Select someone to chat</h2>
+      <p>People who join Vibe will appear on the left</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──
+const socket = io();
+let me = null;          // { id, name, color, init }
+let users = {};         // id -> user
+let activeId = null;
+let messages = {};      // userId -> [{type,text,time}]
+let unread = {};        // userId -> count
+let typingTimers = {};
+
+// WebRTC
+let peerConn = null;
+let localStream = null;
+let screenStream = null;
+let micOn = true;
+let camOn = true;
+let screenSharing = false;
+let currentCallId = null;
+let currentCallType = null;
+let pendingOffer = null;
+let callSeconds = 0;
+let callInterval = null;
+
+const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+// ── JOIN ──
+document.getElementById('joinName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') joinApp();
+});
+
+function joinApp() {
+  const name = document.getElementById('joinName').value.trim();
+  if (!name) { document.getElementById('joinName').focus(); return; }
+  document.getElementById('joinBtn').disabled = true;
+  socket.emit('join', name);
+}
+
+socket.on('welcome', (user) => {
+  me = user;
+  document.getElementById('joinScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+  const initials = user.init;
+  document.getElementById('myAv').textContent = initials;
+  document.getElementById('myAv').style.background = `linear-gradient(135deg,${user.color},${user.color}99)`;
+  document.getElementById('myName').textContent = user.name;
+});
+
+// ── USER LIST ──
+socket.on('user_list', (list) => {
+  users = {};
+  list.forEach(u => { if (u.id !== socket.id) { users[u.id] = u; if (!messages[u.id]) messages[u.id] = []; if (!unread[u.id]) unread[u.id] = 0; } });
+  renderContacts();
+});
+
+socket.on('user_joined', (user) => {
+  if (user.id === socket.id) return;
+  showToast('👋 ' + user.name + ' joined Vibe');
+});
+
+socket.on('user_left', ({ id }) => {
+  const u = users[id];
+  if (u) { showToast(u.name + ' left'); delete users[id]; renderContacts(); if (activeId === id) showEmpty(); }
+});
+
+// ── CONTACTS ──
+function renderContacts() {
+  const list = document.getElementById('cList');
+  const q = document.getElementById('searchIn').value.toLowerCase();
+  const all = Object.values(users).filter(u => u.name.toLowerCase().includes(q));
+
+  if (all.length === 0) {
+    list.innerHTML = `<div style="padding:40px 16px;text-align:center;color:var(--txt3);font-size:13px;line-height:1.6">
+      ${q ? 'No results.' : 'Waiting for others to join…<br>Share the link!'}
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = '<div class="sec-lbl">Online Now</div>';
+  all.forEach(u => {
+    const msgs = messages[u.id] || [];
+    const last = msgs.length ? msgs[msgs.length-1].text : 'Say hi!';
+    const ub = unread[u.id] || 0;
+    const el = document.createElement('div');
+    el.className = 'contact' + (activeId === u.id ? ' active' : '');
+    el.innerHTML = `
+      <div class="av" style="background:${u.color}22;color:${u.color}">
+        ${u.init}
+        <div class="av-dot" style="background:var(--online)"></div>
+      </div>
+      <div class="ci">
+        <div class="ct">
+          <span class="cn">${esc(u.name)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span class="cp">${esc(last.slice(0,34))}${last.length>34?'…':''}</span>
+          ${ub > 0 ? `<span class="badge">${ub}</span>` : ''}
+        </div>
+      </div>`;
+    el.onclick = () => { unread[u.id] = 0; openChat(u.id); };
+    list.appendChild(el);
+  });
+}
+
+// ── CHAT ──
+function openChat(userId) {
+  activeId = userId;
+  const u = users[userId];
+  if (!u) return;
+  renderContacts();
+
+  const main = document.getElementById('mainArea');
+  main.innerHTML = `
+    <div class="ch">
+      <div class="av" style="width:40px;height:40px;font-size:13px;background:${u.color}22;color:${u.color}">
+        ${u.init}
+        <div class="av-dot" style="background:var(--online)"></div>
+      </div>
+      <div class="ch-info">
+        <div class="ch-name">${esc(u.name)}</div>
+        <div class="ch-st" id="chatStatus">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--online);display:inline-block;animation:bounce 2s infinite"></span>
+          Active now
+        </div>
+      </div>
+      <div class="ch-acts">
+        <button class="call-btn audio" title="Audio call" onclick="startCall('audio')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.18 2 2 0 0 1 3.6 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.55a16 16 0 0 0 6 6l.96-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.5 16l.5.92z"/></svg>
+        </button>
+        <button class="call-btn video" title="Video call" onclick="startCall('video')">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="msgs" id="msgArea">
+      <div class="date-div"><span>Today</span></div>
+      <div id="msgList"></div>
+    </div>
+    <div class="input-area">
+      <div class="inp-box">
+        <textarea id="msgIn" placeholder="Message ${esc(u.name)}…" rows="1"
+          onkeydown="handleKey(event)" oninput="autoResize(this);handleTyping()"></textarea>
+      </div>
+      <button class="send-btn" id="sendB" onclick="sendMsg()" disabled>
+        <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>`;
+
+  document.getElementById('msgIn').addEventListener('input', function() {
+    document.getElementById('sendB').disabled = !this.value.trim();
+  });
+  renderMsgs(userId);
+}
+
+function showEmpty() {
+  activeId = null;
+  document.getElementById('mainArea').innerHTML = `
+    <div class="empty">
+      <div class="empty-ic">✦</div>
+      <h2>Select someone to chat</h2>
+      <p>People who join Vibe will appear on the left</p>
+    </div>`;
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+}
+
+function autoResize(el) {
+  el.style.height = '21px';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+let typingTimeout = null;
+function handleTyping() {
+  if (!activeId) return;
+  socket.emit('typing', { toId: activeId, typing: true });
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    socket.emit('typing', { toId: activeId, typing: false });
+  }, 2000);
+}
+
+function sendMsg() {
+  const ta = document.getElementById('msgIn');
+  const txt = ta?.value.trim();
+  if (!txt || !activeId) return;
+  socket.emit('message', { toId: activeId, text: txt });
+  ta.value = '';
+  ta.style.height = '21px';
+  document.getElementById('sendB').disabled = true;
+  socket.emit('typing', { toId: activeId, typing: false });
+}
+
+// ── INCOMING MESSAGES ──
+socket.on('message', (msg) => {
+  if (!messages[msg.fromId]) messages[msg.fromId] = [];
+  messages[msg.fromId].push({ type: 'recv', text: msg.text, time: fmtTime(msg.time) });
+  if (activeId !== msg.fromId) {
+    unread[msg.fromId] = (unread[msg.fromId] || 0) + 1;
+    showToast('💬 ' + msg.fromName + ': ' + msg.text.slice(0, 40));
+  } else {
+    renderMsgs(msg.fromId);
+  }
+  renderContacts();
+});
+
+socket.on('message_sent', (msg) => {
+  if (!messages[msg.toId]) messages[msg.toId] = [];
+  messages[msg.toId].push({ type: 'sent', text: msg.text, time: fmtTime(msg.time) });
+  if (activeId === msg.toId) renderMsgs(msg.toId);
+  renderContacts();
+});
+
+socket.on('typing', ({ fromId, fromName, typing }) => {
+  if (activeId !== fromId) return;
+  const list = document.getElementById('msgList');
+  if (!list) return;
+  document.getElementById('typingEl')?.remove();
+  if (!typing) return;
+  const u = users[fromId];
+  const el = document.createElement('div');
+  el.id = 'typingEl';
+  el.className = 'typing-row fade-in';
+  el.innerHTML = `
+    <div class="mav" style="background:${u?.color||'#444'}22;color:${u?.color||'#888'}">${u?.init||'?'}</div>
+    <div class="typing-bub"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+  list.appendChild(el);
+  scrollBottom();
+  clearTimeout(typingTimers[fromId]);
+  typingTimers[fromId] = setTimeout(() => el.remove(), 3500);
+});
+
+function renderMsgs(userId) {
+  const list = document.getElementById('msgList');
+  if (!list) return;
+  const u = users[userId];
+  list.innerHTML = '';
+  (messages[userId] || []).forEach(m => {
+    if (m.sys) {
+      list.insertAdjacentHTML('beforeend', `<div class="sys-msg">${esc(m.text)}</div>`);
+      return;
+    }
+    const row = document.createElement('div');
+    row.className = 'mrow ' + m.type + ' fade-in';
+    if (m.type === 'recv') {
+      row.innerHTML = `
+        <div class="mav" style="background:${u?.color||'#444'}22;color:${u?.color||'#888'}">${u?.init||'?'}</div>
+        <div class="mstack">
+          <div class="bubble recv">${esc(m.text)}</div>
+          <div class="mmeta">${m.time}</div>
+        </div>`;
+    } else {
+      row.innerHTML = `
+        <div class="mstack">
+          <div class="bubble sent">${esc(m.text)}</div>
+          <div class="mmeta">
+            ${m.time}
+            <svg width="14" height="14" fill="none" stroke="#93c5fd" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg width="14" height="14" fill="none" stroke="#93c5fd" stroke-width="2.5" viewBox="0 0 24 24" style="margin-left:-10px"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>`;
+    }
+    list.appendChild(row);
+  });
+  scrollBottom();
+}
+
+// ── WEBRTC ──
+async function startCall(type) {
+  if (!activeId) return;
+  const u = users[activeId];
+  currentCallId = activeId;
+  currentCallType = type;
+
+  showCallOverlay(u, type, 'Calling…');
+  document.getElementById('btnCam').style.display = type === 'video' ? 'flex' : 'none';
+  document.getElementById('btnScreen').style.display = type === 'video' ? 'flex' : 'none';
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
+    if (type === 'video') showLocalVideo();
+  } catch(e) { showToast('⚠️ Camera/mic error: ' + e.message); }
+
+  peerConn = new RTCPeerConnection(ICE_SERVERS);
+  if (localStream) localStream.getTracks().forEach(t => peerConn.addTrack(t, localStream));
+
+  peerConn.ontrack = e => { showRemoteVideo(e.streams[0]); };
+  peerConn.onicecandidate = e => { if (e.candidate) socket.emit('ice_candidate', { toId: currentCallId, candidate: e.candidate }); };
+  peerConn.onconnectionstatechange = () => {
+    if (peerConn?.connectionState === 'connected') startCallTimer();
+    if (['disconnected','failed','closed'].includes(peerConn?.connectionState)) endCall();
+  };
+
+  const offer = await peerConn.createOffer();
+  await peerConn.setLocalDescription(offer);
+  socket.emit('call_offer', { toId: currentCallId, offer, callType: type });
+}
+
+socket.on('call_offer', async ({ fromId, fromName, fromColor, fromInit, offer, callType }) => {
+  const u = users[fromId] || { name: fromName, color: fromColor, init: fromInit, id: fromId };
+  pendingOffer = { fromId, offer, callType };
+  showIncomingCall(u, callType);
+});
+
+async function acceptCall() {
+  document.getElementById('incCall').classList.remove('show');
+  if (!pendingOffer) return;
+  const { fromId, offer, callType } = pendingOffer;
+  pendingOffer = null;
+  currentCallId = fromId;
+  currentCallType = callType;
+  const u = users[fromId];
+
+  showCallOverlay(u, callType, 'Connecting…');
+  document.getElementById('btnCam').style.display = callType === 'video' ? 'flex' : 'none';
+  document.getElementById('btnScreen').style.display = callType === 'video' ? 'flex' : 'none';
+
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: callType === 'video' });
+    if (callType === 'video') showLocalVideo();
+  } catch(e) { showToast('⚠️ ' + e.message); }
+
+  peerConn = new RTCPeerConnection(ICE_SERVERS);
+  if (localStream) localStream.getTracks().forEach(t => peerConn.addTrack(t, localStream));
+
+  peerConn.ontrack = e => { showRemoteVideo(e.streams[0]); };
+  peerConn.onicecandidate = e => { if (e.candidate) socket.emit('ice_candidate', { toId: currentCallId, candidate: e.candidate }); };
+  peerConn.onconnectionstatechange = () => {
+    if (peerConn?.connectionState === 'connected') startCallTimer();
+    if (['disconnected','failed','closed'].includes(peerConn?.connectionState)) endCall();
+  };
+
+  await peerConn.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await peerConn.createAnswer();
+  await peerConn.setLocalDescription(answer);
+  socket.emit('call_answer', { toId: currentCallId, answer });
+}
+
+socket.on('call_answer', async ({ answer }) => {
+  if (peerConn) await peerConn.setRemoteDescription(new RTCSessionDescription(answer));
+});
+
+socket.on('ice_candidate', async ({ candidate }) => {
+  if (peerConn && candidate) {
+    try { await peerConn.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+  }
+});
+
+socket.on('call_ended', () => { endCall(false); });
+socket.on('call_declined', () => {
+  endCall(false);
+  showToast('📵 Call declined');
+});
+
+function declineCall() {
+  document.getElementById('incCall').classList.remove('show');
+  if (pendingOffer) {
+    socket.emit('call_decline', { toId: pendingOffer.fromId });
+    pendingOffer = null;
+  }
+}
+
+function endCall(notify = true) {
+  if (notify && currentCallId) socket.emit('call_end', { toId: currentCallId });
+  clearInterval(callInterval);
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+  if (peerConn) { peerConn.close(); peerConn = null; }
+  document.getElementById('callOverlay').classList.remove('active');
+  document.getElementById('localVideo').srcObject = null;
+  document.getElementById('localVideo').style.display = 'none';
+  document.getElementById('remoteVideo').srcObject = null;
+  document.getElementById('remoteVideo').style.display = 'none';
+  document.getElementById('localPh').style.display = 'flex';
+  document.getElementById('remotePh').style.display = 'flex';
+  document.getElementById('screenWrap').classList.remove('active');
+  screenSharing = false;
+  currentCallId = null;
+}
+
+// ── CALL UI HELPERS ──
+function showCallOverlay(u, type, status) {
+  const ov = document.getElementById('callOverlay');
+  document.getElementById('callAv').textContent = u?.init || '?';
+  document.getElementById('callAv').style.cssText += `;background:${u?.color||'#444'}22;color:${u?.color||'#888'}`;
+  document.getElementById('audioCallAv').textContent = u?.init || '?';
+  document.getElementById('audioCallAv').style.cssText += `;background:${u?.color||'#444'}22;color:${u?.color||'#888'}`;
+  document.getElementById('callNm').textContent = u?.name || 'Unknown';
+  document.getElementById('callSt').textContent = status;
+  document.getElementById('callTimer').style.display = 'none';
+  document.getElementById('remoteLabel').textContent = u?.name || '';
+  document.getElementById('videoGrid').style.display = type === 'video' ? 'flex' : 'none';
+  document.getElementById('audioVis').style.display = type === 'audio' ? 'flex' : 'none';
+  document.getElementById('screenWrap').classList.remove('active');
+  ov.classList.add('active');
+  micOn = true; camOn = true; screenSharing = false;
+  updateMicBtn(); updateCamBtn();
+}
+
+function showIncomingCall(u, type) {
+  const ic = document.getElementById('incCall');
+  document.getElementById('incAv').textContent = u.init;
+  document.getElementById('incAv').style.cssText = `width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#fff;background:${u.color}22;color:${u.color}`;
+  document.getElementById('incNm').textContent = u.name;
+  document.getElementById('incType').textContent = (type === 'video' ? '📹 Incoming video call' : '📞 Incoming audio call');
+  ic.classList.add('show');
+  setTimeout(() => ic.classList.remove('show'), 30000);
+}
+
+function showLocalVideo() {
+  const lv = document.getElementById('localVideo');
+  lv.srcObject = localStream;
+  lv.style.display = 'block';
+  document.getElementById('localPh').style.display = 'none';
+}
+
+function showRemoteVideo(stream) {
+  const rv = document.getElementById('remoteVideo');
+  rv.srcObject = stream;
+  rv.style.display = 'block';
+  document.getElementById('remotePh').style.display = 'none';
+}
+
+function startCallTimer() {
+  callSeconds = 0;
+  document.getElementById('callSt').textContent = 'Connected';
+  document.getElementById('callTimer').style.display = 'block';
+  clearInterval(callInterval);
+  callInterval = setInterval(() => {
+    callSeconds++;
+    const m = Math.floor(callSeconds / 60), s = callSeconds % 60;
+    document.getElementById('callTimer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+  }, 1000);
+}
+
+function toggleMic() {
+  micOn = !micOn;
+  if (localStream) localStream.getAudioTracks().forEach(t => { t.enabled = micOn; });
+  updateMicBtn();
+  showToast(micOn ? '🎤 Mic on' : '🔇 Mic muted');
+}
+
+function updateMicBtn() {
+  const b = document.getElementById('btnMic');
+  b.classList.toggle('off', !micOn);
+  b.innerHTML = micOn
+    ? `<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`
+    : `<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`;
+}
+
+function toggleCam() {
+  camOn = !camOn;
+  if (localStream) localStream.getVideoTracks().forEach(t => { t.enabled = camOn; });
+  const lv = document.getElementById('localVideo');
+  lv.style.display = camOn ? 'block' : 'none';
+  document.getElementById('localPh').style.display = camOn ? 'none' : 'flex';
+  updateCamBtn();
+  showToast(camOn ? '📷 Camera on' : '📷 Camera off');
+}
+
+function updateCamBtn() {
+  const b = document.getElementById('btnCam');
+  b.classList.toggle('off', !camOn);
+}
+
+async function toggleScreen() {
+  if (!screenSharing) {
+    try {
+      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      document.getElementById('screenVideo').srcObject = screenStream;
+      document.getElementById('screenWrap').classList.add('active');
+      document.getElementById('btnScreen').classList.add('on');
+      screenSharing = true;
+      showToast('🖥 Screen sharing started');
+      screenStream.getVideoTracks()[0].addEventListener('ended', () => toggleScreen());
+    } catch(e) { if (e.name !== 'AbortError') showToast('Could not share screen'); }
+  } else {
+    if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
+    document.getElementById('screenVideo').srcObject = null;
+    document.getElementById('screenWrap').classList.remove('active');
+    document.getElementById('btnScreen').classList.remove('on');
+    screenSharing = false;
+    showToast('Screen sharing stopped');
+  }
+}
+
+// ── TAB VISIBILITY ──
+function setOnlineStatus(online) {
+  const el = document.getElementById('myStatus');
+  if (!el) return;
+  el.textContent = online ? '● Active now' : '○ Away';
+  el.style.color = online ? 'var(--online)' : 'var(--away)';
+}
+document.addEventListener('visibilitychange', () => setOnlineStatus(!document.hidden));
+window.addEventListener('focus', () => setOnlineStatus(true));
+window.addEventListener('blur', () => setOnlineStatus(false));
+
+// ── SEARCH ──
+document.getElementById('searchIn').addEventListener('input', renderContacts);
+
+// ── UTILS ──
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function scrollBottom() { const a = document.getElementById('msgArea'); if (a) a.scrollTop = a.scrollHeight; }
+function fmtTime(iso) {
+  try {
+    const d = new Date(iso), h = d.getHours(), m = d.getMinutes();
+    return (h%12||12) + ':' + (m<10?'0':'')+m + ' ' + (h>=12?'PM':'AM');
+  } catch { return ''; }
+}
+
+let toastT;
+function showToast(msg, dur=3500) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// Expose for inline handlers
+window.joinApp = joinApp;
+window.startCall = startCall;
+window.endCall = endCall;
+window.toggleMic = toggleMic;
+window.toggleCam = toggleCam;
+window.toggleScreen = toggleScreen;
+window.acceptCall = acceptCall;
+window.declineCall = declineCall;
+window.sendMsg = sendMsg;
+window.handleKey = handleKey;
+window.autoResize = autoResize;
+window.handleTyping = handleTyping;
+</script>
+</body>
+</html>
